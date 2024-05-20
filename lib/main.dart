@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:async';
 import 'dart:io';
 
-void main() {
+Future<void> main() async {
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -89,8 +92,28 @@ class _CameraWidgetState extends State<CameraWidget> {
       final image = await _controller!.takePicture();
       final imagePath = File(image.path);
 
-      setState(() {
-        _image = imagePath;
+      // Set the file name as the current timestamp or any unique identifier
+      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Create a reference to the Firebase Storage bucket
+      FirebaseStorage storage = FirebaseStorage.instance;
+      Reference ref = storage.ref().child('uploads/$fileName.jpg');
+
+      // Upload the file
+      UploadTask uploadTask = ref.putFile(imagePath);
+
+      // Optional: if you want to get the download URL after uploading
+      uploadTask.whenComplete(() async {
+        final downloadUrl = await ref.getDownloadURL();
+        print('File uploaded. Download URL: $downloadUrl');
+
+        // Update your state or UI with the download URL
+        setState(() {
+          _image = imagePath;
+          // You can also store the downloadUrl in your state
+        });
+      }).catchError((onError) {
+        print(onError);
       });
     } catch (e) {
       print(e);
