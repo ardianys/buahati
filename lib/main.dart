@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:io';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -86,13 +84,57 @@ class _CameraWidgetState extends State<CameraWidget> {
     _initializeControllerFuture = _controller!.initialize();
   }
 
-  // Step 5: Implement a method to take a picture
   Future<void> _takePicture() async {
     try {
       await _initializeControllerFuture;
       final image = await _controller!.takePicture();
       final imagePath = File(image.path);
 
+      // Update your state or UI
+      setState(() {
+        _image = imagePath;
+      });
+
+      // Set the file name as the current timestamp or any unique identifier
+      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Create a multipart request for the file upload
+      var request = http.MultipartRequest(
+          'POST', Uri.parse('https://absensi.rumah.vip/api/attendances'));
+
+      // Attach the file to the request
+      request.files.add(await http.MultipartFile.fromPath(
+          'photo', imagePath.path,
+          filename: '$fileName.jpg'));
+
+      // Send the request
+      var streamedResponse = await request.send();
+
+      // Convert the StreamedResponse to a Response
+      var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        print('File uploaded successfully');
+        print('Server response: ${response.body}');
+      } else {
+        print('File upload failed with status: ${response.statusCode}');
+        print('Server response: ${response.body}');
+      }
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  // Step 5: Implement a method to take a picture
+  Future<void> _takePictureFirebase() async {
+    try {
+      await _initializeControllerFuture;
+      final image = await _controller!.takePicture();
+      final imagePath = File(image.path);
+      setState(() {
+        _image = imagePath;
+        // You can also store the downloadUrl in your state
+      });
       // Set the file name as the current timestamp or any unique identifier
       String fileName = DateTime.now().millisecondsSinceEpoch.toString();
 
@@ -109,10 +151,6 @@ class _CameraWidgetState extends State<CameraWidget> {
         print('File uploaded. Download URL: $downloadUrl');
 
         // Update your state or UI with the download URL
-        setState(() {
-          _image = imagePath;
-          // You can also store the downloadUrl in your state
-        });
       }).catchError((onError) {
         print(onError);
       });
