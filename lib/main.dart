@@ -80,7 +80,12 @@ class _CameraWidgetState extends State<CameraWidget> {
   // Step 3 & 4: Initialize CameraController and get available cameras
   void _initCamera() async {
     final cameras = await availableCameras();
-    _controller = CameraController(cameras.first, ResolutionPreset.medium);
+    final frontCamera = cameras.firstWhere(
+      (camera) => camera.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras
+          .last, // Use the last camera if a front camera is not available
+    );
+    _controller = CameraController(frontCamera, ResolutionPreset.medium);
     _initializeControllerFuture = _controller!.initialize();
   }
 
