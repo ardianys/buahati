@@ -104,8 +104,9 @@ class _CameraWidgetState extends State<CameraWidget> {
         future: _initializeControllerFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done) {
-            return Center(
-              child: CameraPreview(_controller!),
+            return const Center(
+              // child: CameraPreview(_controller!),
+              child: Text('Taking pictures in the background...'),
             );
           } else {
             return Center(child: CircularProgressIndicator());
