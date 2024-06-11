@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:io';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+  final cameras = await availableCameras();
+  final firstCamera = cameras.first;
+  runApp(MyApp(camera: firstCamera));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final CameraDescription camera;
+
+  const MyApp({super.key, required this.camera});
 
   @override
   Widget build(BuildContext context) {
@@ -20,48 +23,16 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: CameraWidget(),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            CameraWidget(),
-          ],
-        ),
-      ),
+      home: CameraWidget(camera: camera),
     );
   }
 }
 
 class CameraWidget extends StatefulWidget {
+  final CameraDescription camera;
+
+  const CameraWidget({super.key, required this.camera});
+
   @override
   _CameraWidgetState createState() => _CameraWidgetState();
 }
@@ -69,36 +40,29 @@ class CameraWidget extends StatefulWidget {
 class _CameraWidgetState extends State<CameraWidget> {
   CameraController? _controller;
   Future<void>? _initializeControllerFuture;
-  File? _image;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _initCamera();
-  }
-
-  // Step 3 & 4: Initialize CameraController and get available cameras
-  void _initCamera() async {
-    final cameras = await availableCameras();
-    final frontCamera = cameras.firstWhere(
-      (camera) => camera.lensDirection == CameraLensDirection.front,
-      orElse: () => cameras
-          .last, // Use the last camera if a front camera is not available
-    );
-    _controller = CameraController(frontCamera, ResolutionPreset.medium);
+    _controller = CameraController(widget.camera, ResolutionPreset.medium);
     _initializeControllerFuture = _controller!.initialize();
+    _initializeControllerFuture!.then((_) {
+      _startTakingPictures();
+    });
   }
 
-  Future<void> _takePicture() async {
+  void _startTakingPictures() {
+    _timer = Timer.periodic(Duration(seconds: 15), (timer) async {
+      await _takeAndUploadPicture();
+    });
+  }
+
+  Future<void> _takeAndUploadPicture() async {
     try {
       await _initializeControllerFuture;
       final image = await _controller!.takePicture();
       final imagePath = File(image.path);
-
-      // Update your state or UI
-      setState(() {
-        _image = imagePath;
-      });
 
       // Set the file name as the current timestamp or any unique identifier
       String fileName = DateTime.now().millisecondsSinceEpoch.toString();
@@ -132,89 +96,28 @@ class _CameraWidgetState extends State<CameraWidget> {
     }
   }
 
-  // Step 5: Implement a method to take a picture
-  Future<void> _takePictureFirebase() async {
-    try {
-      await _initializeControllerFuture;
-      final image = await _controller!.takePicture();
-      final imagePath = File(image.path);
-      setState(() {
-        _image = imagePath;
-        // You can also store the downloadUrl in your state
-      });
-      // Set the file name as the current timestamp or any unique identifier
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-
-      // Create a reference to the Firebase Storage bucket
-      FirebaseStorage storage = FirebaseStorage.instance;
-      Reference ref = storage.ref().child('uploads/$fileName.jpg');
-
-      // Upload the file
-      UploadTask uploadTask = ref.putFile(imagePath);
-
-      // Optional: if you want to get the download URL after uploading
-      uploadTask.whenComplete(() async {
-        final downloadUrl = await ref.getDownloadURL();
-        print('File uploaded. Download URL: $downloadUrl');
-
-        // Update your state or UI with the download URL
-      }).catchError((onError) {
-        print(onError);
-      });
-    } catch (e) {
-      print(e);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Absen Buah Hati')),
-      // Step 6: Update UI
-      body: Column(
-        children: <Widget>[
-          Expanded(
-            child: FutureBuilder<void>(
-              future: _initializeControllerFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.done) {
-                  return Center(
-                    // Center the container
-                    child: Container(
-                      width: MediaQuery.of(context).size.width *
-                          0.4, // 50% of screen width
-                      height: MediaQuery.of(context).size.height *
-                          0.4, // 50% of screen height
-                      child:
-                          CameraPreview(_controller!), // CameraPreview widget
-                    ),
-                  );
-                } else {
-                  return Center(child: CircularProgressIndicator());
-                }
-              },
-            ),
-          ),
-          _image == null
-              ? Text('No image selected.')
-              : Container(
-                  width: MediaQuery.of(context).size.width * 0.4,
-                  height: MediaQuery.of(context).size.height * 0.4,
-                  child: Image.file(_image!, fit: BoxFit.cover),
-                ),
-          FloatingActionButton(
-            onPressed: _takePicture,
-            tooltip: 'Take Picture',
-            child: Icon(Icons.camera),
-          ),
-        ],
+      appBar: AppBar(title: Text('Dash Cam')),
+      body: FutureBuilder<void>(
+        future: _initializeControllerFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.done) {
+            return Center(
+              child: CameraPreview(_controller!),
+            );
+          } else {
+            return Center(child: CircularProgressIndicator());
+          }
+        },
       ),
     );
   }
 
-  // Step 7: Dispose the controller
   @override
   void dispose() {
+    _timer?.cancel();
     _controller?.dispose();
     super.dispose();
   }
