@@ -112,6 +112,8 @@ class _CameraWidgetState extends State<CameraWidget> {
           'photo', imagePath.path,
           filename: '$fileName.jpg'));
 
+      request.fields['token'] = 'aQgcMrG1WBW4YjFkBW';
+
       // Send the request
       var streamedResponse = await request.send();
 
