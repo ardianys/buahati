@@ -45,7 +45,11 @@ class _CameraWidgetState extends State<CameraWidget> {
   @override
   void initState() {
     super.initState();
-    _controller = CameraController(widget.camera, ResolutionPreset.medium);
+    _controller = CameraController(
+      widget.camera,
+      ResolutionPreset.high,
+      imageFormatGroup: ImageFormatGroup.jpeg,
+    );
     _initializeControllerFuture = _controller!.initialize();
     _initializeControllerFuture!.then((_) {
       _startTakingPictures();
